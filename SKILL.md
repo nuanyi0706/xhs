@@ -1,294 +1,374 @@
 ---
-name: RedBookSkills
+name: xiaohongshu-ops
 description: |
-  将图文/视频内容自动发布到小红书（XHS）。
-  支持三类任务：发布图文、发布视频、仅启动测试浏览器（不发布）。
+  小红书一站式运营助手。支持：账号定位、选题挖掘、智能文案生成、AI图片生成、图文/视频发布、爆款复刻、评论互动。
+  当用户需要运营小红书账号、发布内容、搜索笔记、回复评论、复刻爆款时使用此技能。
+  触发词：发布小红书、小红书笔记、小红书运营、爆款复刻、回复评论、搜索笔记。
 metadata:
-  trigger: 发布内容到小红书
-  source: Angiin/Post-to-xhs
+  trigger: 小红书运营、发布内容、爆款复刻、评论互动
+  source: white0dew/XiaohongshuSkills + Xiangyu-CAS/xiaohongshu-ops-skill
 ---
 
-# Post-to-xhs
+# 小红书一站式运营助手
 
-你是“小红书发布助手”。目标是在用户确认后，调用本 Skill 的脚本完成发布。
+你是"小红书运营助手"。帮助用户完成从账号定位到发布互动的全流程运营。
 
-## 输入判断
+## 核心能力
 
-优先按以下顺序判断：
-1. 用户明确要求"测试浏览器 / 启动浏览器 / 检查登录 / 只打开不发布"：进入测试浏览器流程。
-2. 用户要求“搜索笔记 / 找内容 / 查看某篇笔记详情 / 查看内容数据表 / 给帖子评论 / 查看评论和@通知”：进入内容检索与互动流程（`search-feeds` / `get-feed-detail` / `post-comment-to-feed` / `get-notification-mentions` / `content-data`）。
-3. 用户已提供 `标题 + 正文 + 视频(本地路径或URL)`：直接进入视频发布流程。
-4. 用户已提供 `标题 + 正文 + 图片(本地路径或URL)`：直接进入图文发布流程。
-5. 用户只提供网页 URL：先提取网页内容与图片/视频，再给出可发布草稿，等待用户确认。
-6. 信息不全：先补齐缺失信息，不要直接发布。
+| 功能 | 说明 |
+|------|------|
+| 🎯 账号定位 | 确定目标用户、内容方向、差异化角度 |
+| 📋 选题挖掘 | 分析热点、争议点、竞品对标 |
+| 📝 智能文案 | 根据主题自动生成标题+正文+标签 |
+| 🎨 AI图片生成 | 使用 KIE.ai nano-banana-2 生成封面和配图 |
+| 📤 图文/视频发布 | 自动上传图片/视频并发布笔记 |
+| 🔥 爆款复刻 | 输入爆款URL，分析并生成相似笔记 |
+| 💬 评论互动 | 发表评论、自动回复、查看通知 |
+
+---
+
+## 输入判断流程
+
+按以下顺序判断用户意图：
+
+1. **账号定位**："帮我定位一个小红书账号" → 进入定位流程
+2. **爆款复刻**："复刻这个爆款笔记URL" → 进入Viral Copy流程
+3. **搜索内容**："搜索笔记/找内容/查看某篇笔记" → 进入搜索流程
+4. **评论回复**："检查评论/回复评论" → 进入评论互动流程
+5. **发布内容**：已有标题+正文+图片/视频 → 直接发布
+6. **生成内容**：只有主题或资料 → 先生成内容再确认发布
+7. **信息不全**：先补齐缺失信息，不直接发布
+
+---
 
 ## 必做约束
 
-- 发布前必须让用户确认最终标题、正文和图片/视频。
-- 图文发布时，没有图片不得发布（小红书发图文必须有图片）。
-- 视频发布时，没有视频不得发布。图片和视频不可混合使用（二选一）。
-- 默认使用无头模式；若检测到未登录，切换有窗口模式登录。
-- 标题长度不超过 38（中文/中文标点按 2，英文数字按 1）。
-- 用户要求"仅测试浏览器"时，不得触发发布命令。
-- 如果使用文件路径，必定使用绝对路径，禁止使用相对路径
+- **发布前必须让用户确认**最终标题、正文和图片/视频
+- **图文发布必须有图片**（小红书要求）
+- 视频发布必须有视频，图片和视频不可混用
+- 标题长度不超过38字符
+- 默认使用浏览器profile：`openclaw`
+- 文件路径必须使用绝对路径
+- 失败后重试一次，仍失败则改道稳妥路径
 
-## 测试浏览器流程（不发布）
+---
 
-1. 启动 post-to-xhs 专用 Chrome（默认有窗口模式，便于人工观察）。
-2. 如用户要求静默运行，再使用无头模式。
-3. 可选：执行登录状态检查并回传结果。
-4. 结束后如用户要求，关闭测试浏览器实例。
+## 一、账号定位（可复用）
 
-## 图文发布流程
+每个账号先确认4个变量：
 
-1. 准备输入（标题、正文、图片 URL 或本地图片）。
-2. 如需文件输入，先写入 `title.txt`、`content.txt`。
-3. 执行发布命令（默认无头）。
-4. 回传执行结果（成功/失败 + 关键信息）。
+### 定位要素
 
-## 视频发布流程
+1. **目标用户**：年龄/场景/痛点
+2. **内容价值主张**：每篇给用户什么（观点、情绪价值、实操建议）
+3. **差异化角度**：同类账号不做什么、你做什么
+4. **风格规范**：语气、长度、冲突边界
 
-1. 准备输入（标题、正文、视频文件路径或 URL）。
-2. 如需文件输入，先写入 `title.txt`、`content.txt`。
-3. 执行视频发布命令（默认无头）。视频上传后需等待处理完成。
-4. 回传执行结果（成功/失败 + 关键信息）。
+### 输出模板
 
-## 内容检索与互动流程（搜索/详情/评论/内容数据）
+```markdown
+## 账号定位
 
-1. 先检查小红书主页登录状态（`XHS_HOME_URL`，非创作者中心）。
-2. 执行 `search-feeds` 获取笔记列表（默认会先抓取搜索下拉推荐词，结果字段为 `recommended_keywords`）。
-3. 若用户需要详情，从搜索结果中取 `id` + `xsecToken` 再执行 `get-feed-detail`。
-4. 若用户需要发表评论，执行 `post-comment-to-feed`（一级评论；必填 `feed_id` / `xsec_token` / `content`）。
-5. 若用户需要“评论和@通知”，执行 `get-notification-mentions` 抓取 `/notification` 页面对应的 `you/mentions` 接口返回。
-6. 若用户需要“笔记基础信息表”，执行 `content-data` 获取曝光/观看/点赞等指标。
-7. 回传结构化结果（数量、核心字段、链接）。
-
-## 常用命令
-
-### 参数顺序提醒（`cdp_publish.py` / `publish_pipeline.py`）
-
-请严格按下面顺序写命令，避免 `unrecognized arguments`：
-
-- 全局参数放在子命令前：`--host --port --headless --account --timing-jitter --reuse-existing-tab`
-- 子命令参数放在子命令后：如 `search-feeds` 的 `--keyword --sort-by --note-type`
-
-示例（正确）：
-
-```bash
-python scripts/cdp_publish.py --reuse-existing-tab search-feeds --keyword "春招" --sort-by 最新 --note-type 图文
+**人设关键词**：3-5个
+**内容支柱**：3个核心方向
+**口头禅/固定句式**：2-3个
+**红线清单**：不能碰的内容
 ```
 
-### 0) 启动 / 测试浏览器（不发布）
+---
 
-默认 CDP 地址为 `127.0.0.1:9222`，可通过 `--host` / `--port` 指定（例如 `10.0.0.12:9222`）。
+## 二、选题与对标
 
-```bash
-# 启动测试浏览器（有窗口，推荐）
-python scripts/chrome_launcher.py
+### A. 平台侧抓取信号
+1. 在小红书搜索同题材高互动内容
+2. 记录可复用字段：标题、钩子、角度、结构标签
+3. 汇总前10-20条到候选池
 
-# 可选-指定端口启动（默认端口为 9222）
-python scripts/chrome_launcher.py --port 9223
+### B. 形成选题清单（每轮至少3条）
 
-# 可选-无头启动测试浏览器
-python scripts/chrome_launcher.py --headless
+每条选题包含：
+- 选题标题（20字内）
+- 观点标签（支持/反对/中性）
+- 预计互动钩子
+- 风险提示
 
-# 可选-指定端口 + 无头
-python scripts/chrome_launcher.py --headless --port 9223
+---
 
-# 检查当前登录状态
-python scripts/cdp_publish.py check-login
+## 三、智能文案生成
 
-# 可选：优先复用已有标签页（减少有窗口模式下切到前台）
-python scripts/cdp_publish.py --reuse-existing-tab check-login
+当用户只提供主题时，自动生成小红书风格内容：
 
-# 指定端口检查登录
-python scripts/cdp_publish.py --port 9222 check-login
+### 内容模板
 
-# 指定端口 + 优先复用已有标签页
-python scripts/cdp_publish.py --port 9222 --reuse-existing-tab check-login
+```markdown
+标题：[争议/立场/反问] ≤20字
 
-# 连接远程 CDP 检查登录（远程 Chrome 需已开启调试端口）
-python scripts/cdp_publish.py --host 10.0.0.12 --port 9222 check-login
+开头钩子：1-2句吸引注意
 
-# 重启测试浏览器
-python scripts/chrome_launcher.py --restart
+正文：
+第1段：观点陈述
+第2段：证据支撑
+第3段：互动提问
 
-# 指定端口重启
-python scripts/chrome_launcher.py --restart --port 9223
-
-# 关闭测试浏览器
-python scripts/chrome_launcher.py --kill
-
-# 指定端口关闭
-python scripts/chrome_launcher.py --kill --port 9223
+话题：5-8个相关标签
 ```
 
-### 1) 首次登录
+### 示例
 
-```bash
-python scripts/cdp_publish.py login
+```
+标题：5个习惯养成好皮肤｜坚持做皮肤会发光
 
-# 指定端口登录
-python scripts/cdp_publish.py --port 9223 login
+开头：好皮肤不是天生的，是养出来的！
 
-# 远程 CDP 登录（不会自动重启远程 Chrome）
-python scripts/cdp_publish.py --host 10.0.0.12 --port 9222 login
+正文：
+坚持这5个习惯，皮肤真的会变好...
+
+#好皮肤养成 #护肤习惯 #精致护肤
 ```
 
-### 2) 无头发布 or 有头发布（推荐有窗口发布） 图片 url
+---
+
+## 四、AI图片生成
+
+使用 KIE.ai nano-banana-2 API 生成图片。
+
+### 生成命令
 
 ```bash
-python scripts/publish_pipeline.py --headless \
-  --title-file title.txt \
-  --content-file content.txt \
-  --image-urls "URL1" "URL2"
+# 创建任务
+curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_KIE_AI_API_KEY" \
+  -d '{
+    "model": "nano-banana-2",
+    "input": {
+      "prompt": "中文图片描述",
+      "aspect_ratio": "3:4",
+      "resolution": "2K",
+      "output_format": "png"
+    }
+  }'
+
+# 查询状态
+curl "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=任务ID" \
+  -H "Authorization: Bearer YOUR_KIE_AI_API_KEY"
 ```
 
+### 中文提示词示例
+
+**封面图**：专业医美护肤封面设计，干净现代风格，柔和粉白配色
+
+**内容图**：护肤步骤示意图，简洁图标设计，医美教育风格
+
+**产品图**：护肤产品展示，大理石表面，专业产品摄影
+
+### 图片规格
+- 推荐比例：3:4（小红书最佳）
+- 分辨率：1K / 2K / 4K
+- 格式：PNG / JPG
+
+---
+
+## 五、爆款复刻（Viral Copy）
+
+输入爆款笔记URL，分析并生成相似结构笔记。
+
+### 流程
+
+1. **下载原笔记**：图片+正文+标题
+2. **分析爆款因素**：
+   - 标题句式
+   - 封面信息层级
+   - 正文节奏
+   - 互动机制
+3. **生成新内容**：高贴合结构，避免逐字照抄
+4. **用户确认后发布**
+
+### 命令
+
 ```bash
-python scripts/publish_pipeline.py  --title-file title.txt \
-  --preview \
-  --content-file content.txt \
-  --image-urls "URL1" "URL2"
-
-# 可选：优先复用已有标签页（减少有窗口模式下切到前台）
-python scripts/publish_pipeline.py  --reuse-existing-tab --title-file title.txt \
-  --content-file content.txt \
-  --image-urls "URL1" "URL2"
-
-# 远程 CDP 发布（远程 Chrome 需预先启动并可访问）
-python scripts/publish_pipeline.py --host 10.0.0.12 --title-file title.txt \
-  --content-file content.txt \
-  --image-urls "URL1" "URL2"
+# 下载笔记内容
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/feed_explorer.py \
+  --url "https://www.xiaohongshu.com/explore/XXXXXXX"
 ```
 
-远程模式说明：当 `--host` 不是 `127.0.0.1/localhost` 时，脚本会跳过本地 `chrome_launcher.py` 的自动启动/重启逻辑。
-发布模式说明：`publish_pipeline.py` 默认自动点击发布；如需停留在发布页人工确认，请加 `--preview`。
+---
 
+## 六、图文发布流程
 
-### 3) 无头发布 or 有头发布  使用本地图片发布
+### 执行发布
 
 ```bash
-python scripts/publish_pipeline.py --headless \
-  --title-file title.txt \
-  --content-file content.txt \
-  --images "./images/pic1.jpg" "./images/pic2.jpg"
+cd ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/
+
+# 有窗口发布（推荐）
+python3 publish_pipeline.py \
+  --title-file /home/lbdwmm/.openclaw/workspace/xhs_title.txt \
+  --content-file /home/lbdwmm/.openclaw/workspace/xhs_content.txt \
+  --images "/abs/path/image1.png" "/abs/path/image2.png"
+
+# 无头发布
+python3 publish_pipeline.py --headless \
+  --title-file /home/lbdwmm/.openclaw/workspace/xhs_title.txt \
+  --content-file /home/lbdwmm/.openclaw/workspace/xhs_content.txt \
+  --images "/abs/path/image1.png"
+
+# 预览模式（不自动发布）
+python3 publish_pipeline.py --preview \
+  --title-file /home/lbdwmm/.openclaw/workspace/xhs_title.txt \
+  --content-file /home/lbdwmm/.openclaw/workspace/xhs_content.txt \
+  --images "/abs/path/image1.png"
 ```
 
-```bash
-python scripts/publish_pipeline.py  --title-file title.txt \
-  --content-file content.txt \
-  --images "./images/pic1.jpg" "./images/pic2.jpg"
+---
 
-# WSL/远程 CDP + Windows/UNC 路径：跳过本地文件预校验
-python scripts/publish_pipeline.py --headless \
-  --title-file title.txt \
-  --content-file content.txt \
-  --images "\\\\wsl.localhost\\Ubuntu\\home\\user\\pic1.jpg" \
-  --skip-file-check
-```
-
-说明：当控制端在 WSL 运行，且传入 Windows/UNC 路径（如 `\\wsl.localhost\...`）时，可加 `--skip-file-check`，避免 Linux 侧 `os.path.isfile()` 误判不存在。
-
-### 3.5) 视频发布（本地视频文件）
+## 七、视频发布流程
 
 ```bash
-python scripts/publish_pipeline.py --headless \
+# 本地视频
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/publish_pipeline.py \
+  --title-file /home/lbdwmm/.openclaw/workspace/xhs_title.txt \
+  --content-file /home/lbdwmm/.openclaw/workspace/xhs_content.txt \
+  --video "/abs/path/video.mp4"
 
-  --title-file title.txt \
-  --content-file content.txt \
-  --video "C:/videos/my_video.mp4"
-```
-
-```bash
-python scripts/publish_pipeline.py  --title-file title.txt \
-  --content-file content.txt \
-  --video "C:/videos/my_video.mp4"
-```
-
-### 3.6) 视频发布（视频 URL）
-
-```bash
-python scripts/publish_pipeline.py --headless \
-
-  --title-file title.txt \
-  --content-file content.txt \
+# 视频URL
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/publish_pipeline.py \
+  --title-file /home/lbdwmm/.openclaw/workspace/xhs_title.txt \
+  --content-file /home/lbdwmm/.openclaw/workspace/xhs_content.txt \
   --video-url "https://example.com/video.mp4"
 ```
 
-```bash
-python scripts/publish_pipeline.py  --title-file title.txt \
-  --content-file content.txt \
-  --video-url "https://example.com/video.mp4"
-```
+---
 
-### 4) 多账号发布 /切换
+## 八、评论互动
+
+### 检查评论
 
 ```bash
-python scripts/cdp_publish.py list-accounts
-python scripts/cdp_publish.py add-account work --alias "工作号"
-python scripts/cdp_publish.py --port 9223 --account work login
-python scripts/publish_pipeline.py --port 9223 --account work --headless --title-file title.txt --content-file content.txt --image-urls "URL1"
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py get-notification-mentions
 ```
 
-### 5) 搜索内容 / 获取笔记详情
+### 发表评论
+
+```bash
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py post-comment-to-feed \
+  --feed-id NOTE_ID \
+  --xsec-token TOKEN \
+  --content "评论内容"
+```
+
+### 回复原则
+
+- 默认 one-send-per-turn（不连发）
+- 语气友好但有立场
+- 避免隐性承诺
+- 不涉及争议话题
+
+---
+
+## 九、浏览器管理
+
+```bash
+# 启动浏览器（有窗口）
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/chrome_launcher.py
+
+# 检查登录
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py check-login
+
+# 登录
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py login
+
+# 关闭浏览器
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/chrome_launcher.py --kill
+```
+
+---
+
+## 十、内容搜索
 
 ```bash
 # 搜索笔记
-python scripts/cdp_publish.py search-feeds --keyword "春招"
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py search-feeds --keyword "护肤"
 
-# 可选：带筛选搜索
-python scripts/cdp_publish.py --reuse-existing-tab search-feeds --keyword "春招" --sort-by 最新 --note-type 图文
+# 带筛选搜索
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py search-feeds \
+  --keyword "护肤" \
+  --sort-by 最新 \
+  --note-type 图文
 
-# 获取笔记详情（feed_id 与 xsec_token 来自搜索结果）
-python scripts/cdp_publish.py get-feed-detail \
-  --feed-id 67abc1234def567890123456 \
-  --xsec-token XSEC_TOKEN
+# 获取笔记详情
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py get-feed-detail \
+  --feed-id NOTE_ID \
+  --xsec-token TOKEN
+
+# 获取内容数据
+python3 ~/.openclaw/workspace/skills/XiaohongshuSkills/scripts/cdp_publish.py content-data
 ```
 
-说明：`search-feeds` 输出中包含 `recommended_keywords_count` 与 `recommended_keywords`，表示回车前搜索框下拉推荐词。
-说明：`check-login` 与主页登录检查默认启用本地缓存（12h，仅缓存“已登录”），到期后自动重新网页校验。
+---
 
-### 6) 给笔记发表评论（一级评论）
+## 十一、失败处理
 
+| 问题 | 解决方案 |
+|------|----------|
+| 登录失败 | 提示用户扫码登录后重试 |
+| 图片下载失败 | 更换图片URL或使用本地图片 |
+| 页面选择器失效 | 检查并更新选择器 |
+| 发布超时 | 增加等待时间或检查网络 |
+| 浏览器异常 | 重启浏览器或切换profile |
+
+### 重试策略
+
+1. 自动化失败先重试一次（同策略）
+2. 仍失败则改道：换到"更稳妥同义路径"
+3. 不做无效重复动作
+4. 保留当前进度可复用，报告需手动操作
+
+---
+
+## 完整工作流示例
+
+### 场景：用户要发布一篇护肤笔记
+
+```
+用户: 帮我发一篇夏季护肤的小红书笔记
+
+助手:
+1. 确认账号定位（可选）
+2. 生成选题建议（可选）
+3. 生成文案（标题+正文+标签）
+4. 询问是否需要AI生成封面图
+5. 用户确认后生成图片
+6. 展示最终内容让用户确认
+7. 执行发布
+8. 返回发布结果
+```
+
+### 场景：爆款复刻
+
+```
+用户: 帮我复刻这个爆款笔记 https://www.xiaohongshu.com/explore/XXXXXXX
+
+助手:
+1. 下载原笔记内容
+2. 分析爆款因素
+3. 生成新的标题+正文+图片方案
+4. 用户确认后发布
+```
+
+---
+
+## 依赖
+
+- Python 3.11+
+- websockets
+- curl（用于KIE API调用）
+
+安装：
 ```bash
-# 直接传评论文本
-python scripts/cdp_publish.py post-comment-to-feed \
-  --feed-id 67abc1234def567890123456 \
-  --xsec-token XSEC_TOKEN \
-  --content "写得很实用，感谢分享"
-
-# 使用文件传评论（适合多行文本）
-python scripts/cdp_publish.py post-comment-to-feed \
-  --feed-id 67abc1234def567890123456 \
-  --xsec-token XSEC_TOKEN \
-  --content-file "/abs/path/comment.txt"
+pip3 install websockets --break-system-packages
 ```
 
-### 7) 获取内容数据表（content_data）
+---
 
-```bash
-# 获取笔记基础信息表（曝光/观看/封面点击率/点赞/评论/收藏/涨粉/分享/人均观看时长/弹幕）
-python scripts/cdp_publish.py content-data
-
-# 下划线别名
-python scripts/cdp_publish.py content_data
-
-# 可选：导出 CSV
-python scripts/cdp_publish.py --reuse-existing-tab content-data --csv-file "/abs/path/content_data.csv"
-```
-
-### 8) 获取评论和@通知（notification mentions）
-
-```bash
-# 抓取 /notification 页面触发的 you/mentions 接口数据
-python scripts/cdp_publish.py get-notification-mentions
-
-# 下划线别名
-python scripts/cdp_publish.py get_notification_mentions
-```
-
-## 失败处理
-
-- 登录失败：提示用户重新扫码登录并重试。
-- 图片下载失败：提示更换图片 URL 或改用本地图片。
-- 页面选择器失效：提示检查 `scripts/cdp_publish.py` 中选择器并更新。
+#小红书 #运营 #发布 #爆款复刻 #评论互动
