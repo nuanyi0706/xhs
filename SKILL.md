@@ -204,7 +204,7 @@ metadata:
 # 创建任务
 curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer 0c55aecd7ad43f909b0a8d533d570a30" \
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
   -d '{
     "model": "nano-banana-2",
     "input": {
@@ -217,7 +217,7 @@ curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
 
 # 查询状态
 curl "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=任务ID" \
-  -H "Authorization: Bearer 0c55aecd7ad43f909b0a8d533d570a30"
+  -H "Authorization: Bearer YOUR_API_KEY_HERE"
 ```
 
 ### 中文提示词示例
