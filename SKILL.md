@@ -202,9 +202,10 @@ metadata:
 
 ```bash
 # 火山引擎 Doubao Seedream 图片生成
+# 注意：请将 YOUR_API_KEY 替换为你的火山引擎 API Key
 curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
     "model": "doubao-seedream-5-0-260128",
     "prompt": "中文图片描述",
@@ -218,7 +219,7 @@ curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
 # 批量生成多张图片（如4张）
 curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
     "model": "doubao-seedream-5-0-260128",
     "prompt": "中文图片描述",
@@ -235,7 +236,7 @@ curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
 # 图生图（参考图片生成新图）
 curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
     "model": "doubao-seedream-5-0-260128",
     "prompt": "参考这张图生成变体",
