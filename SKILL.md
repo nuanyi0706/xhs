@@ -28,7 +28,7 @@ metadata:
 | 🎯 账号定位 | 确定目标用户、内容方向、差异化角度 |
 | 📋 选题挖掘 | 分析热点、争议点、竞品对标 |
 | 📝 爆款文案 | 标题公式+结构化正文+智能标签，注入真情实感 |
-| 🎨 AI图片生成 | 使用 KIE.ai nano-banana-2 生成封面和配图 |
+| 🎨 AI图片生成 | 使用火山引擎 Doubao Seedream 生成封面和配图 |
 | 📤 图文/视频发布 | 自动上传图片/视频并发布笔记 |
 | 🔥 爆款复刻 | 输入爆款URL，分析并生成相似笔记 |
 | 💬 评论互动 | 发表评论、自动回复、查看通知 |
@@ -201,23 +201,51 @@ metadata:
 ### 生成命令
 
 ```bash
-# 创建任务
-curl -X POST "https://api.kie.ai/api/v1/jobs/createTask" \
+# 火山引擎 Doubao Seedream 图片生成
+curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
   -d '{
-    "model": "nano-banana-2",
-    "input": {
-      "prompt": "中文图片描述",
-      "aspect_ratio": "3:4",
-      "resolution": "2K",
-      "output_format": "png"
-    }
+    "model": "doubao-seedream-5-0-260128",
+    "prompt": "中文图片描述",
+    "sequential_image_generation": "disabled",
+    "response_format": "url",
+    "size": "2K",
+    "stream": false,
+    "watermark": false
   }'
 
-# 查询状态
-curl "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=任务ID" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE"
+# 批量生成多张图片（如4张）
+curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
+  -d '{
+    "model": "doubao-seedream-5-0-260128",
+    "prompt": "中文图片描述",
+    "sequential_image_generation": "auto",
+    "sequential_image_generation_options": {
+        "max_images": 4
+    },
+    "response_format": "url",
+    "size": "2K",
+    "stream": true,
+    "watermark": false
+  }'
+
+# 图生图（参考图片生成新图）
+curl -X POST "https://ark.cn-beijing.volces.com/api/v3/images/generations" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer 7347d374-3ce1-4395-a2d9-22cb62377baa" \
+  -d '{
+    "model": "doubao-seedream-5-0-260128",
+    "prompt": "参考这张图生成变体",
+    "image": "https://example.com/reference.png",
+    "sequential_image_generation": "disabled",
+    "response_format": "url",
+    "size": "2K",
+    "stream": false,
+    "watermark": false
+  }'
 ```
 
 ### 中文提示词示例
