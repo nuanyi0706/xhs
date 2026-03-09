@@ -2650,9 +2650,12 @@ def main():
                 print(f"CONTENT_DATA_CSV: {csv_path}")
 
         elif args.command == "login":
-            # Ensure headed mode for QR scanning
+            # Ensure headed mode for QR scanning - don't restart if already running
             if local_mode:
-                restart_chrome(port=port, headless=False, account=account)
+                # Only start Chrome if not already running, don't restart
+                if not ensure_chrome(port=port, headless=False, account=account):
+                    print("Failed to start Chrome. Exiting.")
+                    sys.exit(1)
             publisher.connect(reuse_existing_tab=reuse_existing_tab)
             publisher.open_login_page()
             print("LOGIN_READY")

@@ -175,18 +175,23 @@ def launch_chrome(
     return proc
 
 
-def kill_chrome(port: int = CDP_PORT):
+def kill_chrome(port: int = CDP_PORT, graceful_timeout: float = 3.0):
     """
     Kill the Chrome instance on the given debug port.
 
     Tries multiple strategies:
-    1. Send CDP Browser.close command via HTTP
-    2. Terminate the tracked subprocess
-    3. Kill by port on Windows (taskkill)
+    1. Send CDP Browser.close command via HTTP (graceful shutdown)
+    2. Wait for graceful shutdown with configurable timeout
+    3. Terminate the tracked subprocess
+    4. Kill by port on Windows (taskkill)
+
+    Args:
+        port: CDP remote debugging port.
+        graceful_timeout: Seconds to wait for graceful shutdown after Browser.close.
     """
     global _chrome_process
 
-    # Strategy 1: CDP Browser.close
+    # Strategy 1: CDP Browser.close (graceful shutdown)
     try:
         import requests
         resp = requests.get(f"http://127.0.0.1:{port}/json/version", timeout=2)
@@ -205,8 +210,9 @@ def kill_chrome(port: int = CDP_PORT):
     except Exception:
         pass
 
-    # Wait briefly for Chrome to shut down
-    time.sleep(1)
+    # Wait for graceful shutdown - give Chrome time to save session data
+    print(f"[chrome_launcher] Waiting {graceful_timeout}s for graceful shutdown...")
+    time.sleep(graceful_timeout)
 
     # Strategy 2: Terminate tracked subprocess
     if _chrome_process and _chrome_process.poll() is None:
@@ -244,6 +250,7 @@ def kill_chrome(port: int = CDP_PORT):
     deadline = time.time() + 5
     while time.time() < deadline:
         if not is_port_open(port):
+            print("[chrome_launcher] Chrome shutdown complete.")
             return
         time.sleep(0.5)
 
