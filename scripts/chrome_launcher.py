@@ -19,7 +19,8 @@ from typing import Optional
 
 CDP_PORT = 9222
 PROFILE_DIR_NAME = "XiaohongshuProfile"
-STARTUP_TIMEOUT = 15  # seconds to wait for Chrome to start
+STARTUP_TIMEOUT = 15  # seconds to wait for Chrome to start (X11/default)
+STARTUP_TIMEOUT_WAYLAND = 25  # Wayland may need more time to initialize
 
 # Track the Chrome process we launched so we can kill it later
 _chrome_process: subprocess.Popen | None = None
@@ -108,6 +109,72 @@ def is_port_open(port: int, host: str = "127.0.0.1") -> bool:
             return False
 
 
+def detect_display_environment() -> dict:
+    """
+    Detect the display environment and return appropriate environment variables.
+    
+    Returns a dict with environment variables needed for Chrome to display properly.
+    Handles X11, Wayland, and headless environments.
+    """
+    env = os.environ.copy()
+    
+    # Check if already have display environment
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return env
+    
+    # Try to detect Wayland session
+    xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    wayland_socket = os.path.join(xdg_runtime_dir, "wayland-0")
+    
+    if os.path.exists(wayland_socket):
+        env["WAYLAND_DISPLAY"] = "wayland-0"
+        env["XDG_RUNTIME_DIR"] = xdg_runtime_dir
+        return env
+    
+    # Try to detect X11
+    if os.path.exists("/tmp/.X11-unix"):
+        # Find the X display
+        for display_num in range(10):
+            x_socket = f"/tmp/.X11-unix/X{display_num}"
+            if os.path.exists(x_socket):
+                env["DISPLAY"] = f":{display_num}"
+                break
+    
+    return env
+
+
+def get_chrome_flags_for_display(env: dict = None, headless: bool = False) -> list:
+    """
+    Get Chrome flags needed for the current display environment.
+    
+    Args:
+        env: Environment dict from detect_display_environment(). If None, uses os.environ.
+        headless: If True, add headless flag.
+    
+    Returns a list of Chrome command-line arguments.
+    """
+    flags = []
+    
+    # Use provided env or fall back to os.environ
+    check_env = env if env is not None else os.environ
+    
+    # Check for Wayland
+    wayland_display = check_env.get("WAYLAND_DISPLAY")
+    xdg_runtime = check_env.get("XDG_RUNTIME_DIR")
+    
+    if wayland_display and xdg_runtime:
+        # Wayland environment - need ozone platform
+        flags.extend([
+            "--ozone-platform=wayland",
+            "--enable-features=UseOzonePlatform",
+        ])
+    
+    if headless:
+        flags.append("--headless=new")
+    
+    return flags
+
+
 def launch_chrome(
     port: int = CDP_PORT,
     headless: bool = False,
@@ -134,6 +201,9 @@ def launch_chrome(
     user_data_dir = get_user_data_dir(account)
     _current_account = account
 
+    # Get environment with proper display settings FIRST
+    env = detect_display_environment()
+    
     cmd = [
         chrome_path,
         f"--remote-debugging-port={port}",
@@ -141,9 +211,10 @@ def launch_chrome(
         "--no-first-run",
         "--no-default-browser-check",
     ]
-
-    if headless:
-        cmd.append("--headless=new")
+    
+    # Add display-specific flags (pass env to get correct Wayland flags)
+    display_flags = get_chrome_flags_for_display(env=env, headless=headless)
+    cmd.extend(display_flags)
 
     mode_label = "headless" if headless else "headed"
     account_label = account or "default"
@@ -151,16 +222,25 @@ def launch_chrome(
     print(f"  executable : {chrome_path}")
     print(f"  profile dir: {user_data_dir}")
     print(f"  debug port : {port}")
+    
+    # Log display environment for debugging
+    if env.get("WAYLAND_DISPLAY"):
+        print(f"  display    : Wayland ({env.get('WAYLAND_DISPLAY')})")
+    elif env.get("DISPLAY"):
+        print(f"  display    : X11 ({env.get('DISPLAY')})")
 
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=env,
     )
     _chrome_process = proc
 
     # Wait for the debug port to become available
-    deadline = time.time() + STARTUP_TIMEOUT
+    # Use longer timeout for Wayland environments
+    timeout = STARTUP_TIMEOUT_WAYLAND if env.get("WAYLAND_DISPLAY") else STARTUP_TIMEOUT
+    deadline = time.time() + timeout
     while time.time() < deadline:
         if is_port_open(port):
             print(f"[chrome_launcher] Chrome is ready on port {port}.")
@@ -169,7 +249,7 @@ def launch_chrome(
 
     print(
         f"[chrome_launcher] WARNING: Chrome started but port {port} not responding "
-        f"after {STARTUP_TIMEOUT}s. It may still be initializing.",
+        f"after {timeout}s. It may still be initializing.",
         file=sys.stderr,
     )
     return proc
